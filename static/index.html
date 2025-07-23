@@ -362,6 +362,7 @@
             if (result.error) throw new Error(result.error);
             document.getElementById('aiContent').innerHTML = result.analysis.replace(/\n/g, '<br>');
             showStatus('AI分析が完了しました', 'success');
+            embedMapsInAnalysis();
         } catch (error) {
             document.getElementById('aiContent').innerHTML = `分析中にエラーが発生しました: ${error.message}`;
             showStatus('AI分析エラー', 'error');
@@ -389,6 +390,7 @@
             if (result.error) throw new Error(result.error);
             document.getElementById('aiContent').innerHTML = result.suggestion.replace(/\n/g, '<br>');
             showStatus('探索提案が生成されました', 'success');
+            embedMapsInAnalysis();
         } catch (error) {
             document.getElementById('aiContent').innerHTML = `提案の生成中にエラーが発生しました: ${error.message}`;
             showStatus('探索提案エラー', 'error');
@@ -457,6 +459,65 @@
         connectedDeviceName = null;
         updateDeviceNameDisplay();
         location.reload();
+    }
+
+    // --- AI解析結果に地図を埋め込む ---
+    function embedMapsInAnalysis() {
+        const aiContent = document.getElementById('aiContent');
+        const content = aiContent.innerHTML;
+        
+        // 緯度経度のパターンを検索して地図を埋め込む
+        const regex = /緯度([+-]?\d+\.\d+)、経度([+-]?\d+\.\d+)/g;
+        let result;
+        let modifiedContent = content;
+        let mapIndex = 0;
+        let latLngData = [];
+        
+        // まず緯度経度を収集
+        while ((result = regex.exec(content)) !== null) {
+            latLngData.push({
+                lat: parseFloat(result[1]),
+                lng: parseFloat(result[2]),
+                index: result.index
+            });
+        }
+        
+        // 緯度経度の後に地図を挿入（後ろから挿入してインデックスをずらさない）
+        for (let i = latLngData.length - 1; i >= 0; i--) {
+            const data = latLngData[i];
+            const mapId = `map-${i}`;
+            const mapContainer = `<div id="${mapId}" style="width: 100%; height: 200px; margin: 10px 0; border-radius: 8px; border: 2px solid #e3e8ff;"></div>`;
+            
+            const insertPosition = data.index + `緯度${data.lat}、経度${data.lng}`.length;
+            modifiedContent = modifiedContent.slice(0, insertPosition) + 
+                             '<br>' + mapContainer + 
+                             modifiedContent.slice(insertPosition);
+        }
+        
+        aiContent.innerHTML = modifiedContent;
+        
+        // 少し遅延してから地図を初期化（DOM要素が確実に存在するように）
+        setTimeout(() => {
+            latLngData.forEach((data, i) => {
+                const mapId = `map-${i}`;
+                const mapElement = document.getElementById(mapId);
+                if (mapElement) {
+                    const miniMap = L.map(mapId).setView([data.lat, data.lng], 18);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(miniMap);
+                    
+                    L.marker([data.lat, data.lng], {
+                        icon: L.icon({
+                            iconUrl: '/src/pin.png',
+                            iconSize: [32, 32],
+                            iconAnchor: [16, 32],
+                            popupAnchor: [0, -32]
+                        })
+                    }).addTo(miniMap).bindPopup(`推定位置 ${i + 1}: ${data.lat}, ${data.lng}`);
+                }
+            });
+        }, 100);
     }
 
     /* ---------- 初期化 ---------- */
