@@ -127,6 +127,7 @@
                   <button class="btn" onclick="exportCSV()">CSVエクスポート</button>
                   <button class="btn secondary" onclick="exportJSON()">JSONエクスポート</button>
               </div>
+              <button class="btn danger" onclick="resetHistory()">履歴リセット</button>
           </div>
 
           <div class="ai-section">
@@ -420,6 +421,13 @@
         } catch (error) {
             showStatus('Bluetooth接続に失敗しました: ' + error, 'error');
         }
+    }
+
+    function resetHistory() {
+        localStorage.removeItem('sensorHistory');
+        localStorage.removeItem('deviceTrackerUserId');
+        localStorage.removeItem('sensorPermissionGranted');
+        location.reload();
     }
 
     /* ---------- 初期化 ---------- */
