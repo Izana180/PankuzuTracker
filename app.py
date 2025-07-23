@@ -118,7 +118,7 @@ def get_suggestion():
         
         print("[DEBUG] Calling OpenAI API for suggestion...")
         chat_completion = client.chat.completions.create(
-            model="gpt-3.5-turbo", # 使用 gpt-3.5-turbo 进行测试
+            model="gpt-4o-mini", # 使用 gpt-3.5-turbo 进行测试
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
