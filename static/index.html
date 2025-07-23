@@ -189,11 +189,18 @@
         if (!markerGroup) return;
         markerGroup.clearLayers();
         if (sensorHistory.length === 0) return;
+        // カスタムアイコン（pan.png）
+        const customIcon = L.icon({
+            iconUrl: '/src/pan.png',
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -32]
+        });
         sensorHistory.forEach(record => {
             if (record.loc && record.loc.lat && record.loc.lng) {
                 const lat = parseFloat(record.loc.lat);
                 const lng = parseFloat(record.loc.lng);
-                L.circleMarker([lat, lng], {radius:6, color:'#FF0000'}).addTo(markerGroup)
+                L.marker([lat, lng], {icon: customIcon}).addTo(markerGroup)
                     .bindPopup(`時間: ${new Date(record.ts).toLocaleTimeString()}<br>状態: ${classifyMovement(record.accel).status}`);
             }
         });
