@@ -182,7 +182,7 @@
     let deviceId = null;
     
     // バックエンドサーバーのアドレス
-    const BACKEND_URL = '';
+    const BACKEND_URL = 'https://pankuzutracker-test.onrender.com';
 
     // --- 地図変数 ---
     let map, markerGroup;
@@ -566,29 +566,49 @@
     }
 
     async function fetchAndDisplayBroadcasts() {
+        if (!markerGroup) return;
+        markerGroup.clearLayers();
+
+        // 1. 渲染本地历史轨迹（pan.png）
+        if (sensorHistory && sensorHistory.length > 0) {
+            const customIcon = L.icon({
+                iconUrl: '/src/pan.png',
+                iconSize: [32, 32],
+                iconAnchor: [16, 32],
+                popupAnchor: [0, -32]
+            });
+            sensorHistory.forEach(record => {
+                if (record.loc && record.loc.lat && record.loc.lng) {
+                    const lat = parseFloat(record.loc.lat);
+                    const lng = parseFloat(record.loc.lng);
+                    L.marker([lat, lng], {icon: customIcon}).addTo(markerGroup)
+                        .bindPopup(`時間: ${new Date(record.ts).toLocaleTimeString()}<br>状態: ${classifyMovement(record.accel).status}`);
+                }
+            });
+        }
+
+        // 2. 渲染所有丢失点（lost.png）和协助点（pin2.png）
         try {
             const response = await fetch(`${BACKEND_URL}/api/broadcasts`);
             if (!response.ok) {
-                console.error("放送デバイス取得失敗:", res.status);
+                console.error("放送デバイス取得失敗:", response.status);
                 return;
             }
             const broadcasts = await response.json();
-            console.log("✅ 取得した放送デバイス:", broadcasts);
             if (!Array.isArray(broadcasts)) return;
 
-            // 地图上添加广播点
-            broadcasts.forEach(async b => {
+            console.log("broadcasts", broadcasts);
+            for (const b of broadcasts) {
                 if (b.lastKnownLocation?.lat && b.lastKnownLocation?.lng) {
                     const lat = parseFloat(b.lastKnownLocation.lat);
                     const lng = parseFloat(b.lastKnownLocation.lng);
-                    console.log(`📍 放送デバイス marker を追加中: (${lat}, ${lng})`);
+                    console.log("渲染丢失点", lat, lng, b);
                     const icon = L.icon({
-                        iconUrl: `src/lost.png`,  // 自定义图标
+                        iconUrl: `src/lost.png`,
                         iconSize: [32, 32],
                         iconAnchor: [16, 32],
                         popupAnchor: [0, -32]
                     });
-
                     const popupContent = `
                         📢 <b>紛失デバイス</b><br>
                         デバイスID: ${b.deviceId || '不明'}<br>
@@ -599,13 +619,13 @@
                         時間: ${new Date(b.timestamp).toLocaleString()}<br>
                         <span style="color:#22543d;">${b.message ? '📝 メッセージ: ' + b.message : ''}</span>
                     `;
+                    L.marker([lat, lng], { icon }).addTo(map).bindPopup(popupContent);
 
-                    L.marker([lat, lng], { icon }).addTo(markerGroup).bindPopup(popupContent);
-
-                    // 拉取协助点并显示
+                    // 协助点
                     try {
                         const helpRes = await fetch(`${BACKEND_URL}/api/help_reports?deviceId=${encodeURIComponent(b.deviceId)}`);
                         const helpPoints = await helpRes.json();
+                        console.log("协助点", helpPoints);
                         helpPoints.forEach(h => {
                             if (h.location && h.location.lat && h.location.lng) {
                                 const helpIcon = L.icon({
@@ -614,8 +634,14 @@
                                     iconAnchor: [12, 24],
                                     popupAnchor: [0, -24]
                                 });
-                                L.marker([h.location.lat, h.location.lng], { icon: helpIcon })
-                                    .addTo(markerGroup)
+                                const hlat = typeof h.location.lat === 'string' ? parseFloat(h.location.lat) : h.location.lat;
+                                const hlng = typeof h.location.lng === 'string' ? parseFloat(h.location.lng) : h.location.lng;
+                                console.log("渲染协助点", hlat, hlng, h);
+                                L.marker([
+                                    hlat,
+                                    hlng
+                                ], { icon: helpIcon })
+                                    .addTo(map)
                                     .bindPopup(`🧭 協力者: ${h.helperId}<br>緯度: ${h.location.lat}<br>経度: ${h.location.lng}<br>時間: ${new Date(h.timestamp).toLocaleString()}<br>${h.message ? '📝 メッセージ: ' + h.message : ''}`);
                             }
                         });
@@ -623,8 +649,7 @@
                         console.error('協力位置情報の取得に失敗:', e);
                     }
                 }
-            });
-
+            }
         } catch (err) {
             console.error("紛失情報の取得に失敗:", err);
             showStatus("紛失デバイス情報の取得に失敗しました", "error");
