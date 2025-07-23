@@ -135,6 +135,10 @@ def get_suggestion():
 def serve_index():
     return send_from_directory(app.static_folder, 'index.html')
 
+@app.route('/src/<path:filename>')
+def serve_src(filename):
+    return send_from_directory('src', filename)
+
 # --- 启动服务器 ---
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000, debug=False)
