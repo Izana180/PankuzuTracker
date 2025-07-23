@@ -427,6 +427,11 @@
             connectedDeviceName = device.name || '名称なし';
             showStatus('Bluetoothデバイスに接続しました: ' + connectedDeviceName, 'success');
             updateDeviceNameDisplay();
+            // デバイス切断時に自動で計測停止
+            device.addEventListener('gattserverdisconnected', () => {
+                showStatus('Bluetoothデバイスが切断されました。計測を停止します。', 'error');
+                stopSensing();
+            });
             // 必要なら device.gatt.connect() などで接続を確立
             // 接続成功時にセンサー許可UIを表示
             document.getElementById('bluetoothConnectUI').style.display = 'none';
