@@ -134,6 +134,9 @@
           </div>
 
           <div class="controls-panel">
+              <div id="bluetoothConnectUI">
+                  <button class="btn" onclick="connectBluetoothDevice()">Bluetoothデバイス接続</button>
+              </div>
               <div id="permissionRequestUI" style="display: none;">
                   <p style="margin-bottom: 10px;">あなたの経路を追跡するために、デバイスのセンサーへのアクセス許可が必要です。</p>
                   <button class="btn secondary" style="font-size: 1.1rem; padding: 12px 28px;" onclick="requestPermissionsAndStart()">許可して開始</button>
@@ -482,6 +485,22 @@
         document.body.removeChild(a); URL.revokeObjectURL(url);
     }
 
+    window.connectBluetoothDevice = async function() {
+        try {
+            // acceptAllDevices: true で全Bluetoothデバイスを許可（必要に応じてフィルタを追加）
+            const device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true
+            });
+            showStatus('Bluetoothデバイスに接続しました: ' + (device.name || '名称なし'), 'success');
+            // 必要なら device.gatt.connect() などで接続を確立
+            // 接続成功時にセンサー許可UIを表示
+            document.getElementById('bluetoothConnectUI').style.display = 'none';
+            document.getElementById('permissionRequestUI').style.display = 'block';
+        } catch (error) {
+            showStatus('Bluetooth接続に失敗しました: ' + error, 'error');
+        }
+    }
+
     /* ---------- 初期化 ---------- */
     window.addEventListener('load', () => {
         showStatus('スマートトラッカーシステムの準備ができました', 'success');
@@ -489,12 +508,10 @@
         if (saved) sensorHistory = JSON.parse(saved);
         
         initGrid();
-
-        if (localStorage.getItem('sensorPermissionGranted') === 'true') {
-            initializeSystem();
-        } else {
-            document.getElementById('permissionRequestUI').style.display = 'block';
-        }
+        // Bluetooth接続UIのみ表示
+        document.getElementById('bluetoothConnectUI').style.display = 'block';
+        document.getElementById('permissionRequestUI').style.display = 'none';
+        document.getElementById('mainControls').style.display = 'none';
     });
   </script>
 </body>
