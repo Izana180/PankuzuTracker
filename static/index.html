@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スマートデバイス・トラッカー</title>
+
+  <!-- ----------------------------  CSS  ---------------------------- -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+      :root {
+          --primary-color-start: #667eea;
+          --primary-color-end: #764ba2;
+          --secondary-color-start: #48bb78;
+          --secondary-color-end: #38a169;
+          --header-color-start: #4facfe;
+          --header-color-end: #00f2fe;
+          --bg-light: #f8f9ff;
+          --border-light: #e3e8ff;
+          --text-dark: #2d3748;
+          --text-light: #fff;
+      }
+      *{margin:0;padding:0;box-sizing:border-box;}
+      body{
+          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif,'Apple Color Emoji','Segoe UI Emoji','Segoe UI Symbol','Noto Color Emoji';
+          background:linear-gradient(135deg, var(--primary-color-start) 0%, var(--primary-color-end) 100%);
+          min-height:100vh;padding:1rem;
+      }
+      .container{
+          max-width:900px;margin:0 auto;background:var(--text-light);border-radius:15px;
+          box-shadow:0 20px 40px rgba(0,0,0,.1);overflow:hidden;
+      }
+      .header{
+          background:linear-gradient(135deg, var(--header-color-start) 0%, var(--header-color-end) 100%);
+          color:var(--text-light);padding:30px;text-align:center;
+      }
+      .header h1{font-size:2.2rem;margin-bottom:10px;}
+      .content{padding:20px;}
+      
+      #grid-container {
+          display: none;
+      }
+      #map {
+          width: 100%;
+          height: 45vh;
+          border-radius: 12px;
+          margin-bottom: 20px;
+          border: 3px solid var(--border-light);
+          box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+      }
+      
+      .ai-section {
+          background:linear-gradient(135deg,#ffecd2 0%,#fcb69f 100%);
+          border-radius:12px;padding:25px;margin-bottom:20px;border-left:5px solid #ed8936;
+      }
+      .ai-section h3 { color:#744210; margin-bottom:15px; display:flex; align-items:center; font-size: 1.5rem; }
+      .ai-section h3::before { content:"🤖"; margin-right:10px; }
+      #aiContent {
+          background-color: rgba(255,255,255,0.5);
+          padding: 15px;
+          border-radius: 8px;
+          min-height: 50px;
+          color: #5c4033;
+          line-height: 1.6;
+      }
+
+      .controls-panel {
+          background: var(--bg-light);
+          padding: 15px;
+          border-radius: 12px;
+          margin-bottom: 20px;
+          text-align: center;
+      }
+
+      .btn{
+          background:linear-gradient(135deg, var(--primary-color-start) 0%, var(--primary-color-end) 100%);
+          color:var(--text-light);border:none;padding:10px 20px;border-radius:8px;
+          cursor:pointer;font-size:.9rem;font-weight:600;transition:.3s;margin:5px;
+      }
+      .btn:hover{transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,.2);}
+      .btn:disabled{background: #ccc; cursor: not-allowed; transform: none; box-shadow: none;}
+      .btn.secondary{background:linear-gradient(135deg, var(--secondary-color-start) 0%, var(--secondary-color-end) 100%);}
+      .btn.danger{background:linear-gradient(135deg,#f56565 0%,#e53e3e 100%);}
+      
+      .feature-grid{
+          display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+          gap:20px;
+      }
+      .feature-card{
+          background:var(--bg-light);border:2px solid var(--border-light);border-radius:12px;
+          padding:25px;transition:.3s;
+      }
+      .feature-card h3{color:#4c51bf;margin-bottom:15px;font-size:1.3rem;}
+      
+      .sensor-value{
+          font-family:'Courier New',monospace;background:#edf2f7;padding:5px 10px;
+          border-radius:4px;display:inline-block;margin:2px;
+      }
+      .status{padding:15px;border-radius:8px;margin:15px 0;font-weight:500;}
+      .status.info{background:#bee3f8;color:#2c5282;}
+      .status.error{background:#fed7d7;color:#742a2a;}
+      .status.success{background:#c6f6d5;color:#22543d;}
+
+      #userIdDisplay { font-size: 0.8rem; word-break: break-all; margin-top: 10px; color: #334155;}
+  </style>
+</head>
+<body>
+  <div class="container">
+      <div class="header">
+          <h1>📉 スマートパス・トラッカー</h1>
+          <p>AI駆動のデバイス発見システム</p>
+      </div>
+
+      <div class="content">
+          <div id="map"></div>
+
+          <div class="controls-panel">
+              <div id="bluetoothConnectUI">
+                  <button class="btn" onclick="connectBluetoothDevice()">Bluetoothデバイス接続</button>
+              </div>
+              <div id="permissionRequestUI" style="display: none;">
+                  <p style="margin-bottom: 10px;">あなたの経路を追跡するために、デバイスのセンサーへのアクセス許可が必要です。</p>
+                  <button class="btn secondary" style="font-size: 1.1rem; padding: 12px 28px;" onclick="requestPermissionsAndStart()">許可して開始</button>
+              </div>
+              <div id="mainControls" style="display: none;">
+                  <button class="btn danger" onclick="stopSensing()">計測停止</button>
+                  <button class="btn" onclick="exportCSV()">CSVエクスポート</button>
+                  <button class="btn secondary" onclick="exportJSON()">JSONエクスポート</button>
+              </div>
+              <div id="deviceNameDisplay" style="margin: 10px 0; font-weight: bold;"></div>
+              <button class="btn danger" onclick="resetHistory()">履歴リセット</button>
+              
+          </div>
+          <!-- マルチクライアント通信セクション -->
+          <div class="multi-client-section" style="margin: 24px 0; padding: 18px; background: #f8f9ff; border-radius: 12px; border: 2px solid #e3e8ff; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
+              <h3 style="margin-bottom: 12px; color: #667eea;">マルチクライアント通信</h3>
+              <button class="btn danger" style="margin-right: 12px;" onclick="broadcastLostDevice()">なくしました（周囲に通知）</button>
+              <button class="btn" onclick="assistSearch()">手伝（周囲をスキャン）</button>
+              <button class="btn" onclick="manualHelpReport()">手伝（伝言）</button>
+          </div>
+
+          <div class="ai-section">
+              <h3>AI分析・提案システム</h3>
+              <div id="aiContent">十分なデータが収集されると、AIの分析と提案がここに表示されます...</div>
+              <div style="text-align: center; margin-top: 15px;">
+                  <button class="btn" id="aiAnalysisBtn" onclick="getAIAnalysis()">AI分析を実行</button>
+                  <button class="btn secondary" id="aiSuggestBtn" onclick="getSearchSuggestions()">探索提案を取得</button>
+              </div>
+          </div>
+          
+          <div id="status" class="status info" style="display:none;"></div>
+
+          <div class="feature-grid">
+              <div class="feature-card">
+                  <h3>🧠 データ詳細</h3>
+                  <p>リアルタイムのセンサーデータと認識情報を表示</p>
+                  <div id="accelerometer">加速度: 未検出</div>
+                  <div id="location" style="margin-top: 5px;">位置: 未検出</div>
+                  <div id="movementPattern" style="margin-top: 5px;">移動パターン: 不明</div>
+              </div>
+
+              <div class="feature-card">
+                  <h3>🌐 接続情報</h3>
+                  <p>セッション識別情報</p>
+                  <div id="userIdDisplay" style="margin-top: 5px;">ユーザーID: 未生成</div>
+                  <div id="recordCount" style="margin-top: 5px;">ローカル記録数: 0</div>
+              </div>
+          </div>
+      </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // --- グローバル変数 ---
+    let sensorData = { accelerometer:{x:0,y:0,z:0}, location:{lat:0,lng:0,accuracy:0} };
+    let sensorHistory = [];
+    const HISTORY_LIMIT = 100;
+    let sensingActive = false;
+    let geoWatchId = null;
+    let userId = null;
+    let connectedDeviceName = null;
+    let deviceId = null;
+    
+    // バックエンドサーバーのアドレス
+    const BACKEND_URL = '';
+
+    // --- 地図変数 ---
+    let map, markerGroup;
+
+    function initMap() {
+        map = L.map('map').setView([35.681236, 139.767125], 16); // デフォルト: 東京駅
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        markerGroup = L.layerGroup().addTo(map);
+        updateMapMarkers();
+        fetchAndDisplayBroadcasts(); // 取回所有广播信息并显示在地图
+        // 定时刷新广播点（每10秒）
+        setInterval(fetchAndDisplayBroadcasts, 10000);
+    }
+
+    function updateMapMarkers() {
+        if (!markerGroup) return;
+        markerGroup.clearLayers();
+        if (sensorHistory.length === 0) return;
+        // カスタムアイコン（pan.png）
+        const customIcon = L.icon({
+            iconUrl: '/src/pan.png',
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -32]
+        });
+        sensorHistory.forEach(record => {
+            if (record.loc && record.loc.lat && record.loc.lng) {
+                const lat = parseFloat(record.loc.lat);
+                const lng = parseFloat(record.loc.lng);
+                L.marker([lat, lng], {icon: customIcon}).addTo(markerGroup)
+                    .bindPopup(`時間: ${new Date(record.ts).toLocaleTimeString()}<br>状態: ${classifyMovement(record.accel).status}`);
+            }
+        });
+        // 最後の点にズーム
+        const last = sensorHistory[sensorHistory.length-1];
+        if (last && last.loc && last.loc.lat && last.loc.lng) {
+            map.setView([parseFloat(last.loc.lat), parseFloat(last.loc.lng)], 18);
+        }
+    }
+
+    /* ---------- コアアプリケーションロジック ---------- */
+    function showStatus(message, type = 'info') {
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = message;
+        statusEl.className = `status ${type}`;
+        statusEl.style.display = 'block';
+        setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
+    }
+    
+    function getOrCreateUserId() {
+        let storedUserId = localStorage.getItem('deviceTrackerUserId');
+        if (!storedUserId) {
+            storedUserId = crypto.randomUUID();
+            localStorage.setItem('deviceTrackerUserId', storedUserId);
+        }
+        return storedUserId;
+    }
+
+    function getOrCreateDeviceId() {
+        let storedDeviceId = localStorage.getItem('deviceTrackerDeviceId');
+        if (!storedDeviceId) {
+            storedDeviceId = crypto.randomUUID();
+            localStorage.setItem('deviceTrackerDeviceId', storedDeviceId);
+        }
+        return storedDeviceId;
+    }
+
+    function initializeSystem() {
+        showStatus('システムを初期化しています...', 'info');
+        document.getElementById('permissionRequestUI').style.display = 'none';
+        document.getElementById('mainControls').style.display = 'block';
+        userId = getOrCreateUserId();
+        deviceId = getOrCreateDeviceId();
+        document.getElementById('userIdDisplay').textContent = `ユーザーID: ${userId}`;
+        if (document.getElementById('deviceIdDisplay')) {
+            document.getElementById('deviceIdDisplay').textContent = `デバイスID: ${deviceId}`;
+        }
+        startSensing();
+    }
+
+    window.requestPermissionsAndStart = async function() {
+        let motionGranted = true;
+        try {
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                const permission = await DeviceMotionEvent.requestPermission();
+                motionGranted = (permission === 'granted');
+            }
+        } catch (error) {
+            motionGranted = false;
+            showStatus('モーションセンサーの権限リクエストが失敗しました。', 'error');
+        }
+        if (motionGranted && navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    showStatus('権限が承認されました！', 'success');
+                    localStorage.setItem('sensorPermissionGranted', 'true');
+                    initializeSystem();
+                    handleLocation(position); 
+                },
+                (error) => {
+                    showStatus('位置情報の権限が拒否されました。機能が制限されます。', 'error');
+                    if (motionGranted) {
+                        localStorage.setItem('sensorPermissionGranted', 'true');
+                        initializeSystem();
+                    }
+                }
+            );
+        } else {
+            showStatus('センサーの権限が拒否されたか、利用不可能です。', 'error');
+        }
+    }
+
+    function startSensing() {
+        if (sensingActive) return;
+        sensingActive = true;
+        showStatus('計測を開始しました', 'success');
+        window.addEventListener('devicemotion', handleMotion);
+        if (navigator.geolocation) {
+            geoWatchId = navigator.geolocation.watchPosition(handleLocation, handleLocationError, { enableHighAccuracy: true });
+        }
+    }
+
+    window.stopSensing = function() {
+        if (!sensingActive) { showStatus('計測を停止しました', 'info'); return; }
+        sensingActive = false;
+        window.removeEventListener('devicemotion', handleMotion);
+        if (geoWatchId !== null) navigator.geolocation.clearWatch(geoWatchId);
+        geoWatchId = null;
+        showStatus('計測を停止しました', 'success');
+        connectedDeviceName = null;
+        updateDeviceNameDisplay();
+    }
+
+    function handleMotion(e) {
+        if (!sensingActive) return;
+        sensorData.accelerometer = { x: e.accelerationIncludingGravity.x?.toFixed(2) || 0, y: e.accelerationIncludingGravity.y?.toFixed(2) || 0, z: e.accelerationIncludingGravity.z?.toFixed(2) || 0 };
+        document.getElementById('accelerometer').innerHTML = `加速度: X:${sensorData.accelerometer.x} Y:${sensorData.accelerometer.y} Z:${sensorData.accelerometer.z}`;
+        pushRecord();
+    }
+
+    function handleLocation(pos) {
+        if (!sensingActive) return;
+        sensorData.location = { lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6), accuracy: Math.round(pos.coords.accuracy) };
+        document.getElementById('location').innerHTML = `位置: ${sensorData.location.lat}, ${sensorData.location.lng} (精度: ${sensorData.location.accuracy}m)`;
+        pushRecord();
+    }
+    function handleLocationError(err) { showStatus(`位置情報エラー: ${err.message}`, 'error'); }
+
+    function pushRecord() {
+        if (!sensingActive) return;
+        const rec = { ts: new Date().toISOString(), accel: { ...sensorData.accelerometer }, loc: { ...sensorData.location } };
+        sensorHistory.push(rec);
+        if (sensorHistory.length > HISTORY_LIMIT) sensorHistory.shift();
+        localStorage.setItem('sensorHistory', JSON.stringify(sensorHistory));
+        updateRecordCount();
+        analyzePattern();
+        updateMapMarkers();
+        
+        // --- バックエンドへデータを送信 ---
+        fetch(`${BACKEND_URL}/api/data`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...rec, userId: userId })
+        }).catch(error => console.error('バックエンドへのデータ送信に失敗しました:', error));
+    }
+
+    function updateRecordCount() { document.getElementById('recordCount').textContent = `ローカル記録数: ${sensorHistory.length}`; }
+
+    function classifyMovement(a) {
+        if (!a || a.x === null) return { status: "不明" };
+        const m = Math.sqrt(a.x**2 + a.y**2 + (a.z-9.8)**2);
+        if (m < 0.5) return { status: "静止" };
+        if (m < 2.0) return { status: "歩行" };
+        if (m < 5.0) return { status: "走行" };
+        return { status: "激しい運動" };
+    }
+    
+    function analyzePattern() {
+        if (sensorHistory.length === 0) return;
+        const lastRecord = sensorHistory[sensorHistory.length - 1];
+        const movement = classifyMovement(lastRecord.accel);
+        document.getElementById('movementPattern').innerHTML = `移動パターン: <span class="sensor-value">${movement.status}</span>`;
+    }
+
+    /* ---------- AIとバックエンド通信 ---------- */
+    window.getAIAnalysis = async function() {
+        if (sensorHistory.length < 5) { showStatus('AI分析には最低5件の履歴データが必要です。', 'error'); return; }
+        showStatus('バックエンドにAI分析をリクエスト中...', 'info');
+        document.getElementById('aiContent').innerHTML = '🧠 バックエンドAIが思考中...';
+        document.getElementById('aiAnalysisBtn').disabled = true;
+
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/analyze`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ history: sensorHistory })
+            });
+            if (!response.ok) throw new Error(`バックエンドサーバーエラー: ${response.status}`);
+            const result = await response.json();
+            if (result.error) throw new Error(result.error);
+            document.getElementById('aiContent').innerHTML = result.analysis.replace(/\n/g, '<br>');
+            showStatus('AI分析が完了しました', 'success');
+            embedMapsInAnalysis();
+        } catch (error) {
+            document.getElementById('aiContent').innerHTML = `分析中にエラーが発生しました: ${error.message}`;
+            showStatus('AI分析エラー', 'error');
+        } finally {
+            document.getElementById('aiAnalysisBtn').disabled = false;
+        }
+    }
+    
+    window.getSearchSuggestions = async function() {
+        const currentAnalysis = document.getElementById('aiContent').innerText;
+        if (currentAnalysis.includes('...')) { showStatus('まずAI分析を実行してください。', 'error'); return; }
+        showStatus('バックエンドに探索提案をリクエスト中...', 'info');
+        document.getElementById('aiContent').innerHTML += '<hr>🗺️ バックエンドAIがルートを計画中...';
+        document.getElementById('aiSuggestBtn').disabled = true;
+        
+        try {
+            // バックエンドに /api/suggest インターフェースがあると仮定
+            const response = await fetch(`${BACKEND_URL}/api/suggest`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ analysis: currentAnalysis })
+            });
+            if (!response.ok) throw new Error(`バックエンドサーバーエラー: ${response.status}`);
+            const result = await response.json();
+            if (result.error) throw new Error(result.error);
+            document.getElementById('aiContent').innerHTML = result.suggestion.replace(/\n/g, '<br>');
+            showStatus('探索提案が生成されました', 'success');
+            embedMapsInAnalysis();
+        } catch (error) {
+            document.getElementById('aiContent').innerHTML = `提案の生成中にエラーが発生しました: ${error.message}`;
+            showStatus('探索提案エラー', 'error');
+        } finally {
+            document.getElementById('aiSuggestBtn').disabled = false;
+        }
+    }
+
+    /* ---------- ユーティリティ関数 (エクスポートなど) ---------- */
+    window.exportCSV = function() {
+        if (sensorHistory.length === 0) { showStatus('データがありません', 'error'); return; }
+        const header = ['timestamp', 'ax', 'ay', 'az', 'lat', 'lng', 'accuracy'];
+        const rows = sensorHistory.map(r => [r.ts, r.accel.x, r.accel.y, r.accel.z, r.loc.lat, r.loc.lng, r.loc.accuracy].join(','));
+        downloadFile([header.join(','), ...rows].join('\n'), 'sensor_data.csv', 'text/csv');
+    }
+
+    window.exportJSON = function() {
+        if (sensorHistory.length === 0) { showStatus('データがありません', 'error'); return; }
+        downloadFile(JSON.stringify(sensorHistory, null, 2), 'sensor_data.json', 'application/json');
+    }
+
+    function downloadFile(data, filename, type) {
+        const blob = new Blob([data], { type });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    window.connectBluetoothDevice = async function() {
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true
+            });
+            connectedDeviceName = device.name || '名称なし';
+            // 优先用蓝牙 device.id，否则用本地 deviceId
+            deviceId = device.id || getOrCreateDeviceId();
+            showStatus('Bluetoothデバイスに接続しました: ' + connectedDeviceName, 'success');
+            updateDeviceNameDisplay();
+            device.addEventListener('gattserverdisconnected', () => {
+                showStatus('Bluetoothデバイスが切断されました。計測を停止します。', 'error');
+                stopSensing();
+            });
+            document.getElementById('bluetoothConnectUI').style.display = 'none';
+            document.getElementById('permissionRequestUI').style.display = 'block';
+            if (document.getElementById('deviceIdDisplay')) {
+                document.getElementById('deviceIdDisplay').textContent = `デバイスID: ${deviceId}`;
+            }
+        } catch (error) {
+            showStatus('Bluetooth接続に失敗しました: ' + error, 'error');
+        }
+    }
+
+    function updateDeviceNameDisplay() {
+        const el = document.getElementById('deviceNameDisplay');
+        if (connectedDeviceName) {
+            el.textContent = `計測中: ${connectedDeviceName}`;
+        } else {
+            el.textContent = '';
+        }
+    }
+
+    function resetHistory() {
+        localStorage.removeItem('sensorHistory');
+        localStorage.removeItem('deviceTrackerUserId');
+        localStorage.removeItem('sensorPermissionGranted');
+        connectedDeviceName = null;
+        updateDeviceNameDisplay();
+        location.reload();
+    }
+
+    window.broadcastLostDevice = async function() {
+        const deviceName = connectedDeviceName || "不明デバイス";
+        const userId = getOrCreateUserId();
+        const deviceIdToSend = deviceId || getOrCreateDeviceId();
+        const lastRecord = sensorHistory.length > 0 ? sensorHistory[sensorHistory.length - 1] : null;
+
+        if (!lastRecord || !lastRecord.loc) {
+            showStatus("位置データが見つかりません。計測を行ってください。", "error");
+            return;
+        }
+
+        // 弹窗输入留言
+        const message = prompt("紛失デバイスに関するメッセージや連絡先を入力できます（任意）", "");
+
+        const payload = {
+            deviceId: deviceIdToSend,
+            deviceName,
+            userId,
+            lastKnownLocation: lastRecord.loc,
+            timestamp: new Date().toISOString(),
+            message: message || ""
+        };
+
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/broadcast`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) throw new Error("サーバーエラー");
+            const result = await response.json();
+            showStatus(result.message || "紛失情報を送信しました", "success");
+            await fetchAndDisplayBroadcasts();
+        } catch (error) {
+            showStatus("紛失情報の送信に失敗しました: " + error.message, "error");
+        }
+    }
+
+    window.manualHelpReport = function() {
+        fetch(`${BACKEND_URL}/api/broadcasts`)
+            .then(res => res.json())
+            .then(broadcasts => {
+                if (!Array.isArray(broadcasts) || broadcasts.length === 0) {
+                    showStatus('現在、協力できる紛失デバイスはありません', 'info');
+                    return;
+                }
+                // 默认选择第一个丢失设备（如需多设备可扩展为弹窗选择）
+                const target = broadcasts[0];
+                const deviceId = target.deviceId;
+                const message = prompt("協力メッセージや発見状況を入力してください（任意）", "");
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(async (pos) => {
+                        const location = {
+                            lat: pos.coords.latitude,
+                            lng: pos.coords.longitude,
+                            accuracy: pos.coords.accuracy
+                        };
+                        const payload = {
+                            deviceId,
+                            helperId: getOrCreateUserId(),
+                            location,
+                            timestamp: new Date().toISOString(),
+                            message: message || ""
+                        };
+                        await fetch(`${BACKEND_URL}/api/help_report`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        showStatus('協力位置情報を送信しました', 'success');
+                        await fetchAndDisplayBroadcasts();
+                    }, () => {
+                        showStatus('位置情報の取得に失敗しました', 'error');
+                    });
+                }
+            });
+    }
+
+    async function fetchAndDisplayBroadcasts() {
+        try {
+            const response = await fetch(`${BACKEND_URL}/api/broadcasts`);
+            if (!response.ok) {
+                console.error("放送デバイス取得失敗:", res.status);
+                return;
+            }
+            const broadcasts = await response.json();
+            console.log("✅ 取得した放送デバイス:", broadcasts);
+            if (!Array.isArray(broadcasts)) return;
+
+            // 地图上添加广播点
+            broadcasts.forEach(async b => {
+                if (b.lastKnownLocation?.lat && b.lastKnownLocation?.lng) {
+                    const lat = parseFloat(b.lastKnownLocation.lat);
+                    const lng = parseFloat(b.lastKnownLocation.lng);
+                    console.log(`📍 放送デバイス marker を追加中: (${lat}, ${lng})`);
+                    const icon = L.icon({
+                        iconUrl: `src/lost.png`,  // 自定义图标
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 32],
+                        popupAnchor: [0, -32]
+                    });
+
+                    const popupContent = `
+                        📢 <b>紛失デバイス</b><br>
+                        デバイスID: ${b.deviceId || '不明'}<br>
+                        デバイス名: ${b.deviceName}<br>
+                        ユーザーID: ${b.userId}<br>
+                        緯度: ${lat}<br>
+                        経度: ${lng}<br>
+                        時間: ${new Date(b.timestamp).toLocaleString()}<br>
+                        <span style="color:#22543d;">${b.message ? '📝 メッセージ: ' + b.message : ''}</span>
+                    `;
+
+                    L.marker([lat, lng], { icon }).addTo(markerGroup).bindPopup(popupContent);
+
+                    // 拉取协助点并显示
+                    try {
+                        const helpRes = await fetch(`${BACKEND_URL}/api/help_reports?deviceId=${encodeURIComponent(b.deviceId)}`);
+                        const helpPoints = await helpRes.json();
+                        helpPoints.forEach(h => {
+                            if (h.location && h.location.lat && h.location.lng) {
+                                const helpIcon = L.icon({
+                                    iconUrl: 'src/pin2.png',
+                                    iconSize: [24, 24],
+                                    iconAnchor: [12, 24],
+                                    popupAnchor: [0, -24]
+                                });
+                                L.marker([h.location.lat, h.location.lng], { icon: helpIcon })
+                                    .addTo(markerGroup)
+                                    .bindPopup(`🧭 協力者: ${h.helperId}<br>緯度: ${h.location.lat}<br>経度: ${h.location.lng}<br>時間: ${new Date(h.timestamp).toLocaleString()}<br>${h.message ? '📝 メッセージ: ' + h.message : ''}`);
+                            }
+                        });
+                    } catch (e) {
+                        console.error('協力位置情報の取得に失敗:', e);
+                    }
+                }
+            });
+
+        } catch (err) {
+            console.error("紛失情報の取得に失敗:", err);
+            showStatus("紛失デバイス情報の取得に失敗しました", "error");
+        }
+    }
+
+
+    // --- AI解析結果に地図を埋め込む ---
+    function embedMapsInAnalysis() {
+        const aiContent = document.getElementById('aiContent');
+        const content = aiContent.innerHTML;
+        
+        // 緯度経度のパターンを検索して地図を埋め込む
+        const regex = /緯度([+-]?\d+\.\d+)、経度([+-]?\d+\.\d+)/g;
+        let result;
+        let modifiedContent = content;
+        let mapIndex = 0;
+        let latLngData = [];
+        
+        // まず緯度経度を収集
+        while ((result = regex.exec(content)) !== null) {
+            latLngData.push({
+                lat: parseFloat(result[1]),
+                lng: parseFloat(result[2]),
+                index: result.index
+            });
+        }
+        
+        // 緯度経度の後に地図を挿入（後ろから挿入してインデックスをずらさない）
+        for (let i = latLngData.length - 1; i >= 0; i--) {
+            const data = latLngData[i];
+            const mapId = `map-${i}`;
+            const mapContainer = `<div id="${mapId}" style="width: 100%; height: 200px; margin: 10px 0; border-radius: 8px; border: 2px solid #e3e8ff;"></div>`;
+            
+            const insertPosition = data.index + `緯度${data.lat}、経度${data.lng}`.length;
+            modifiedContent = modifiedContent.slice(0, insertPosition) + 
+                             '<br>' + mapContainer + 
+                             modifiedContent.slice(insertPosition);
+        }
+        
+        aiContent.innerHTML = modifiedContent;
+        
+        // 少し遅延してから地図を初期化（DOM要素が確実に存在するように）
+        setTimeout(() => {
+            latLngData.forEach((data, i) => {
+                const mapId = `map-${i}`;
+                const mapElement = document.getElementById(mapId);
+                if (mapElement) {
+                    const miniMap = L.map(mapId).setView([data.lat, data.lng], 18);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(miniMap);
+                    
+                    L.marker([data.lat, data.lng], {
+                        icon: L.icon({
+                            iconUrl: '/src/pin.png',
+                            iconSize: [32, 32],
+                            iconAnchor: [16, 32],
+                            popupAnchor: [0, -32]
+                        })
+                    }).addTo(miniMap).bindPopup(`推定位置 ${i + 1}: ${data.lat}, ${data.lng}`);
+                }
+            });
+        }, 100);
+    }
+
+    window.assistSearch = async function() {
+        showStatus('周囲のBluetoothデバイスをスキャン中...', 'info');
+        // 1. 获取所有广播
+        let broadcasts = [];
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/broadcasts`);
+            broadcasts = await res.json();
+        } catch (e) {
+            showStatus('放送デバイス情報の取得に失敗', 'error');
+            return;
+        }
+        if (!Array.isArray(broadcasts) || broadcasts.length === 0) {
+            showStatus('現在、協力できる紛失デバイスはありません', 'info');
+            return;
+        }
+        // 2. 获取所有丢失设备的 deviceId 和 deviceName
+        const lostDeviceIds = broadcasts.map(b => b.deviceId).filter(Boolean);
+        const lostDeviceNames = broadcasts.map(b => b.deviceName).filter(Boolean);
+
+        // 3. 扫描蓝牙设备
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                acceptAllDevices: true
+            });
+            // 4. 比对
+            if (lostDeviceIds.includes(device.id) || lostDeviceNames.includes(device.name)) {
+                showStatus(`発見: ${device.name || '名称なし'}（ID: ${device.id}）は紛失デバイスです！`, 'success');
+                // 获取地理位置并上传
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(async (pos) => {
+                        const location = {
+                            lat: pos.coords.latitude,
+                            lng: pos.coords.longitude,
+                            accuracy: pos.coords.accuracy
+                        };
+                        const payload = {
+                            deviceId: device.id,
+                            helperId: getOrCreateUserId(),
+                            location,
+                            timestamp: new Date().toISOString()
+                        };
+                        await fetch(`${BACKEND_URL}/api/help_report`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        showStatus('協力位置情報を送信しました', 'success');
+                    }, () => {
+                        showStatus('位置情報の取得に失敗しました', 'error');
+                    });
+                }
+            } else {
+                showStatus(`発見したデバイス（${device.name || '名称なし'}）は紛失リストにありません`, 'info');
+            }
+        } catch (e) {
+            showStatus('Bluetoothスキャンがキャンセルされました', 'error');
+        }
+    }
+
+    /* ---------- 初期化 ---------- */
+    window.addEventListener('load', () => {
+        showStatus('スマートトラッカーシステムの準備ができました', 'success');
+        const saved = localStorage.getItem('sensorHistory');
+        if (saved) sensorHistory = JSON.parse(saved);
+        deviceId = getOrCreateDeviceId();
+        initMap();
+        document.getElementById('bluetoothConnectUI').style.display = 'block';
+        document.getElementById('permissionRequestUI').style.display = 'none';
+        document.getElementById('mainControls').style.display = 'none';
+        // 设备信息区显示 deviceId
+        if (!document.getElementById('deviceIdDisplay')) {
+            const el = document.createElement('div');
+            el.id = 'deviceIdDisplay';
+            el.style.marginTop = '5px';
+            el.style.fontSize = '0.8rem';
+            el.style.wordBreak = 'break-all';
+            el.style.color = '#334155';
+            el.textContent = `デバイスID: ${deviceId}`;
+            // 插入到 feature-card（接続情報）下方
+            const featureCards = document.getElementsByClassName('feature-card');
+            if (featureCards.length > 1) {
+                featureCards[1].appendChild(el);
+            }
+        }
+    });
+  </script>
+</body>
+</html>
