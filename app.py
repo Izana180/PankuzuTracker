@@ -66,51 +66,26 @@ def analyze_data():
         if len(sensor_history) < 5:
             return jsonify({"error": "分析するにはデータが不足しています（最低5件必要です）"}), 400
 
-        system_prompt = "あなたは優秀な探偵です。ユーザーから提供されたセンサーデータ履歴を分析し、紛失したデバイスが最も可能性の高い場所を3つ、その理由と共に提案してください。"
-        history_str = json.dumps(sensor_history, indent=2, ensure_ascii=False)
-        user_prompt = f"""
-        以下がセンサーデータの履歴です (直近{len(sensor_history)}件):
-        {history_str}
-        分析のポイント:
-        - 位置情報(loc): データがどの場所で途切れたか、または頻繁に記録されているか？
-        - 加速度(accel): 最後の移動状態は何か？
-        - タイムスタンプ(ts): 最後の記録はいつか？
-        これらの情報に基づき、最も可能性の高い場所トップ3を、確率と共に報告してください。
-        回答形式:
+        # 開発用：モックレスポンス（OpenAI APIクォータ制限回避）
+        mock_response = """
         提供されたセンサーデータの履歴を分析した結果、最も可能性の高い場所トップ3およびその理由を以下に示します。
-        
-        1. 場所1: 緯度[緯度値]、経度[経度値]
-        - 確率: [確率]%
-        - 理由:
-        [具体的な理由を記載]
-        
-        2. 場所2: 緯度[緯度値]、経度[経度値]
-        - 確率: [確率]%
-        - 理由:
-        [具体的な理由を記載]
-        
-        3. 場所3: 緯度[緯度値]、経度[経度値]
-        - 確率: [確率]%
-        - 理由:
-        [具体的な理由を記載]
-        
-        これらの情報に基づいて、デバイスが最も可能性の高い場所を上記の3つとして推定します。
-        
-        注意: 緯度経度は必ず「緯度○○、経度○○」の形式で記載してください。
-        """
 
-        print("[DEBUG] Calling OpenAI API for analysis...")
-        chat_completion = client.chat.completions.create(
-            model="gpt-3.5-turbo", # 使用 gpt-3.5-turbo 进行测试
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
-        )
-        analysis_text = chat_completion.choices[0].message.content
-        print("[DEBUG] Successfully received analysis from OpenAI.")
-        return jsonify({"analysis": analysis_text})
-        
+        1. 場所1: 緯度35.387418、経度139.426862
+        - 確率: 70%
+        - 理由: 連続して同一の位置情報が記録されており、最後の記録もこの場所である。最後の移動状態が静止状態であり、データが途切れている可能性が高い。
+
+        2. 場所2: 緯度35.387969、経度139.427110
+        - 確率: 20%
+        - 理由: 位置情報の記録の中で2番目に多く、最後の移動状態も静止となっている。データの途切れた直後に記録されている。
+
+        3. 場所3: 緯度35.388182、経度139.428562
+        - 確率: 10%
+        - 理由: 最初の位置情報であり、最後の移動状態は静止。データの途切れた後に再び近くで記録されている。
+
+        これらの情報に基づいて、デバイスが最も可能性の高い場所を上記の3つとして推定します。
+        """
+        print("[DEBUG] Using mock response for development.")
+        return jsonify({"analysis": mock_response})
     except Exception as e:
         print(f"[ERROR] An error occurred in /api/analyze: {e}")
         return jsonify({"error": f"サーバー内部でエラーが発生しました: {str(e)}"}), 500

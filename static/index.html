@@ -129,6 +129,7 @@
               </div>
               <div id="deviceNameDisplay" style="margin: 10px 0; font-weight: bold;"></div>
               <button class="btn danger" onclick="resetHistory()">履歴リセット</button>
+              <button class="btn secondary" onclick="addMockData()">モックデータ追加</button>
           </div>
 
           <div class="ai-section">
@@ -459,6 +460,36 @@
         connectedDeviceName = null;
         updateDeviceNameDisplay();
         location.reload();
+    }
+
+    // モックの緯度経度データ
+    const mockLocationData = [
+        {lat: 35.388182, lng: 139.428562},
+        {lat: 35.388064, lng: 139.428107},
+        {lat: 35.388178, lng: 139.427681},
+        {lat: 35.387969, lng: 139.427110},
+        {lat: 35.387980, lng: 139.427113},
+        {lat: 35.388064, lng: 139.428107},
+        {lat: 35.388364, lng: 139.426824},
+        {lat: 35.387945, lng: 139.426718},
+        {lat: 35.387418, lng: 139.426862},
+        {lat: 35.387437, lng: 139.426809},
+        {lat: 35.387753, lng: 139.427339}
+    ];
+
+    function addMockData() {
+        mockLocationData.forEach((location, index) => {
+            const mockRecord = {
+                ts: new Date(Date.now() - (mockLocationData.length - index) * 60000).toISOString(), // 1分間隔
+                accel: { x: 1.2, y: 0.8, z: 9.8 }, // モック加速度
+                loc: { lat: location.lat, lng: location.lng, accuracy: 10 }
+            };
+            sensorHistory.push(mockRecord);
+        });
+        localStorage.setItem('sensorHistory', JSON.stringify(sensorHistory));
+        updateRecordCount();
+        updateMapMarkers();
+        showStatus('モックデータを追加しました', 'success');
     }
 
     // --- AI解析結果に地図を埋め込む ---
